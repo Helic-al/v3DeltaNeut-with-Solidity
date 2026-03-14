@@ -1,71 +1,130 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
-// 
+pragma solidity ^0.8.20;
 
+import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
 
-// インターフェースの準備
-INonfungiblePositionManager nfpm = INonfungiblePositionManager(0xC36442b4a4522E871399CD717aBDD847Ab11FE88);
-ISwapRouter router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function allowance(address owner, address spender) external view returns (uint256);
+}
 
+interface ISwapRouter {
+    struct ExactInputSingleParams {
+        address tokenIn; address tokenOut; uint24 fee; address recipient; uint256 deadline;
+        uint256 amountIn; uint256 amountOutMinimum; uint160 sqrtPriceLimitX96;
+    }
+    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+}
+
+interface INonfungiblePositionManager {
+    function positions(uint256 tokenId) external view returns (
+        uint96 nonce, address operator, address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper,
+        uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1
+    );
+    struct DecreaseLiquidityParams { uint256 tokenId; uint128 liquidity; uint256 amount0Min; uint256 amount1Min; uint256 deadline; }
+    function decreaseLiquidity(DecreaseLiquidityParams calldata params) external payable returns (uint256 amount0, uint256 amount1);
+    struct CollectParams { uint256 tokenId; address recipient; uint128 amount0Max; uint128 amount1Max; }
+    function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1);
+    struct MintParams {
+        address token0; address token1; uint24 fee; int24 tickLower; int24 tickUpper;
+        uint256 amount0Desired; uint256 amount1Desired; uint256 amount0Min; uint256 amount1Min;
+        address recipient; uint256 deadline;
+    }
+    function mint(MintParams calldata params) external payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1);
+}
 
 contract Reposition is Script {
-    // ---------------------------------------------------
-    // ① Withdraw (流動性の引き出しと回収)
-    // ---------------------------------------------------
-    // 1. まず流動性を減らす (decreaseLiquidity)
-    nfpm.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams({
-        tokenId: myTokenId, // 現在持っているV3ポジションのNFT ID
-        liquidity: liquidityToRemove,
-        amount0Min: 0,
-        amount1Min: 0,
-        deadline: block.timestamp
-    }));
+    INonfungiblePositionManager constant NFPM = INonfungiblePositionManager(0xC36442b4a4522E871399CD717aBDD847Ab11FE88);
+    ISwapRouter constant ROUTER = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+    address constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+    address constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
+    uint24 constant POOL_FEE = 500;
 
-    // 2. 減らしたトークン（と未収穫の手数料）をウォレットに回収する (collect)
-    nfpm.collect(INonfungiblePositionManager.CollectParams({
-        tokenId: myTokenId,
-        recipient: address(this), // 一旦このコントラクトで受け取る
-        amount0Max: type(uint128).max,
-        amount1Max: type(uint128).max
-    }));
+    function run() external {
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        address deployerAddress = vm.addr(deployerPrivateKey);
 
-    // ---------------------------------------------------
-    // ② Swap (比率の調整)
-    // ---------------------------------------------------
-    // ※Pythonから渡された「どちらのトークンをどれだけSwapするか」の計算結果を使う
-    // スワップルーターにトークンの使用許可(Approve)を出す
-    IERC20(tokenIn).approve(address(router), amountToSwap);
+        vm.startBroadcast(deployerPrivateKey);
 
-    router.exactInputSingle(ISwapRouter.ExactInputSingleParams({
-        tokenIn: tokenIn,
-        tokenOut: tokenOut,
-        fee: 500, // 0.05%プールの場合
-        recipient: address(this),
-        deadline: block.timestamp,
-        amountIn: amountToSwap,
-        amountOutMinimum: 0,
-        sqrtPriceLimitX96: 0
-    }));
+        {
+            if (!vm.envBool("SKIP_WITHDRAW")) {
+                uint256 oldTokenId = vm.envUint("OLD_TOKEN_ID");
+                if (oldTokenId != 0) _withdraw(oldTokenId, deployerAddress);
+            }
+        }
 
-    // ---------------------------------------------------
-    // ③ Add Liquidity (新しいレンジへの流動性追加)
-    // ---------------------------------------------------
-    // NFPMに両方のトークンの使用許可(Approve)を出す
-    IERC20(token0).approve(address(nfpm), amount0ToAdd);
-    IERC20(token1).approve(address(nfpm), amount1ToAdd);
+        {
+            uint256 swapAmount = vm.envUint("SWAP_AMOUNT");
+            if (swapAmount > 0) {
+                _swap(swapAmount, vm.envBool("ZERO_FOR_ONE"), deployerAddress);
+            }
+        }
 
-    // 新しいTickでポジションを作成 (mint)
-    (uint256 newTokenId, , , ) = nfpm.mint(INonfungiblePositionManager.MintParams({
-        token0: token0,
-        token1: token1,
-        fee: 500,
-        tickLower: newTickLower,
-        tickUpper: newTickUpper,
-        amount0Desired: amount0ToAdd,
-        amount1Desired: amount1ToAdd,
-        amount0Min: 0,
-        amount1Min: 0,
-        recipient: address(this), // 新しいNFTの所有者
-        deadline: block.timestamp
-    }));
-}       
+        {
+            uint256 newTokenId = _addLiquidity(
+                int24(vm.envInt("NEW_TICK_LOWER")),
+                int24(vm.envInt("NEW_TICK_UPPER")),
+                deployerAddress
+            );
+            console.log("=== REPOSITION_RESULT ===");
+            console.log("NEW_TOKEN_ID:", newTokenId);
+        }
+
+        vm.stopBroadcast();
+    }
+
+    function _withdraw(uint256 oldTokenId, address recipient) internal {
+        console.log("Starting Withdraw Phase for Token ID:", oldTokenId);
+        
+        uint128 liq;
+        {
+            (,,,,,,, liq, , , , ) = NFPM.positions(oldTokenId);
+        }
+
+        if (liq > 0) {
+            NFPM.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams({
+                tokenId: oldTokenId, liquidity: liq, amount0Min: 0, amount1Min: 0, deadline: block.timestamp
+            }));
+            NFPM.collect(INonfungiblePositionManager.CollectParams({
+                tokenId: oldTokenId, recipient: recipient, amount0Max: type(uint128).max, amount1Max: type(uint128).max
+            }));
+            console.log("Withdraw & Collect successful.");
+        }
+    }
+
+    function _swap(uint256 swapAmount, bool zeroForOne, address recipient) internal {
+        console.log("Starting Swap Phase. Amount:", swapAmount);
+        address tokenIn = zeroForOne ? WETH : USDC;
+        address tokenOut = zeroForOne ? USDC : WETH;
+
+        IERC20(tokenIn).approve(address(ROUTER), swapAmount);
+
+        ROUTER.exactInputSingle(ISwapRouter.ExactInputSingleParams({
+            tokenIn: tokenIn, tokenOut: tokenOut, fee: POOL_FEE, recipient: recipient,
+            deadline: block.timestamp, amountIn: swapAmount, amountOutMinimum: 0, sqrtPriceLimitX96: 0
+        }));
+        console.log("Swap successful.");
+    }
+
+    function _addLiquidity(int24 newTickLower, int24 newTickUpper, address recipient) internal returns (uint256) {
+        console.log("Starting Add Liquidity...");
+        uint256 bal0 = IERC20(WETH).balanceOf(recipient);
+        uint256 bal1 = IERC20(USDC).balanceOf(recipient);
+
+        IERC20(WETH).approve(address(NFPM), bal0);
+        IERC20(USDC).approve(address(NFPM), bal1);
+
+        (uint256 newTokenId, , , ) = NFPM.mint(INonfungiblePositionManager.MintParams({
+            token0: WETH, token1: USDC, fee: POOL_FEE, tickLower: newTickLower, tickUpper: newTickUpper,
+            amount0Desired: bal0, amount1Desired: bal1, amount0Min: 0, amount1Min: 0,
+            recipient: recipient, deadline: block.timestamp
+        }));
+        
+        if (IERC20(WETH).allowance(recipient, address(NFPM)) > 0) IERC20(WETH).approve(address(NFPM), 0);
+        if (IERC20(USDC).allowance(recipient, address(NFPM)) > 0) IERC20(USDC).approve(address(NFPM), 0);
+
+        return newTokenId;
+    }
+}

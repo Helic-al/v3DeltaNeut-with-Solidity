@@ -17,6 +17,7 @@ from hyperliquid.utils import constants
 from logger import setup_logger
 from lowPassFilter import LowPassFilter
 from oorDetector import oorDetector
+from v3Repositioner import PoolRepositioner
 from web3 import Web3
 
 load_dotenv("./.env")
@@ -31,7 +32,9 @@ MAIN_ACCOUNT_ADDRESS = os.environ.get("ARB_WALLET_ADDRESS")
 ARB_SECRET = get_secret_key()
 
 alchemyKey = os.environ.get("ALCHEMY_KEY")  # 秘密鍵
-TARGET_TOKEN_ID = int(os.environ.get("NFT_TOKEN"))  # ★ここにUniswapのToken IDを入れる
+TARGET_TOKEN_ID = int(
+    os.environ.get("NFT_TOKEN", 0)
+)  # ★ここにUniswapのToken IDを入れる
 THRESHOLD = 0.1  # 初期リバランス閾値、dynamoDBの初回記録まではこの値を用いる
 ALLOWABLE_RISK_PCT = 0.050  # 運用資金から許容するズレ(デルタETH)の割合
 TARGET_RATIO = 0.5  # しきい値の何割までデルタを打ち消すか
@@ -361,6 +364,7 @@ class SafeRealBot:
     def get_token_amounts(self, liquidity, sqrtP, tick_lower, tick_upper):
         """流動性Lと価格から、現在のETHとUSDCの保有量を計算する"""
         # Q96 = 2**96
+
         sqrtPa = 1.0001 ** (tick_lower / 2)
         sqrtPb = 1.0001 ** (tick_upper / 2)
 
@@ -655,37 +659,6 @@ class SafeRealBot:
         last_log_time = datetime.datetime.now()
         # 定数定義
         DECIMALS_ETH = 1e18
-
-        # account = eth_account.Account.from_key(HL_PRIVATE_KEY)
-
-        # info = Info(constants.MAINNET_API_URL, skip_ws=True)
-        # exchange = Exchange(account, constants.MAINNET_API_URL)
-
-        # manager = HyperliquidOrderManager(account, info, exchange)
-        # log.info("order manager initialized")
-        # =========================================================================================================
-        # for i in range(MAX_RETRY):
-        #     log.info(f"🔄 注文試行 {i+1}回目...")
-
-        #     # 指値注文を出す
-        #     result_status = manager.place_maker_order(size=0.01, is_buy=True)
-
-        #     # 成功判定（responseの中身を見て判断）
-        #     # ※ place_maker_order の返り値を調整して、成功なら True, 失敗なら False を返すようにすると管理しやすいです
-        #     if result_status and "filled" in result_status.get("status", ""):
-        #         # 即約定した場合（稀にある）
-        #         log.info("✅ 約定しました！")
-        #         break
-        #     elif result_status and "open" in result_status.get("status", ""):
-        #         # 板に並んだ場合
-        #         log.info("✅ 板に並びました（Maker注文成功）")
-        #         break
-        #     else:
-        #         # キャンセルされた（Post-Onlyで弾かれた）場合
-        #         log.info("🛡️ Post-Onlyによりキャンセルされました。価格を再取得してリトライします。")
-        #         time.sleep(2) # 1秒待って相場を落ち着かせる
-        # =========================================================================================================
-
         oorThreshold = 0.06
 
         dataInit = self.get_onchain_data()
@@ -700,6 +673,9 @@ class SafeRealBot:
             k=0.9,
         )
 
+        # リポジションを行うクラスのインスタンス作成
+        pr = PoolRepositioner(TARGET_TOKEN_ID, ARB_SECRET)
+
         lpf = LowPassFilter(alpha=0.15)
 
         emaPrice = LowPassFilter(alpha=0.016)
@@ -709,6 +685,43 @@ class SafeRealBot:
 
         while True:
             data = self.get_onchain_data()
+
+            if self.currentTokenId == 0:
+                tryCount = 1
+                while tryCount < 4:
+                    # TODO:プールのリポジションを実行
+                    tokenAmounts = self.get_token_amounts(
+                        data["L"], data["sqrtP"], data["tickLower"], data["tickUpper"]
+                    )
+                    response = pr.executeReposition(
+                        RPC_URL, data["price"], tokenAmounts[0], tokenAmounts[1], False
+                    )
+
+                    if response:
+                        self.log.info("Successfully minted position!!")
+
+                        # リポジションクラスから新しいTOKENIDを取得してセット
+                        newTokenId = pr.TokenID
+                        self.log.info(f"setting new TokenID: {newTokenId}")
+                        self.currentTokenId = newTokenId
+
+                        break
+
+                    else:
+                        self.log.info("FAILURE.... ")
+                        tryCount += 1
+                        if tryCount < 4:
+                            self.log.info(
+                                f"Making a new challenge. TryCount: {tryCount} \n"
+                            )
+                            continue
+                        else:
+                            self.log.info("failed for 3times. Stopping bot ....")
+                            sendDiscord("failed for 3times. Stopping bot ....")
+                            exit()
+
+                    # breakした場合にはwhileループのはじめからやり直す
+                    continue
 
             # データ取得失敗時などはスキップ
             if data is None:
@@ -773,38 +786,6 @@ class SafeRealBot:
             log.info(
                 f"\r Price:${current_price:.1f} | CurrentThreshold:{self.ETHthreshold:.3f} | LP:{lp_delta_eth:.3f}ETH (${lp_value_usd:.0f}) | Hedge:{data['hedge_pos']:.3f} | Net:{net_delta:.4f} \n"
             )
-            # DEL 20260205
-            # # トレンドに応じてロングとショートのスレッショルドを変化させる
-            # if ePrice >= current_price:
-            #     pThreshold = self.ETHthreshold / 3
-            #     mThreshold = -self.ETHthreshold
-            # else:
-            #     pThreshold = self.ETHthreshold
-            #     mThreshold = -self.ETHthreshold / 3
-
-            # # --- 3. 判定 ---
-            # # ロングの判定
-            # if net_delta > pThreshold:
-            #     target_delta = self.ETHthreshold * TARGET_RATIO
-            #     hedgeSize = -1 * (net_delta - target_delta)
-            #     if data["price"] * abs(hedgeSize) > 10.5:
-            #         log.info(f"\n🚨 Rebalance Required! Net Delta: {net_delta:.4f}")
-            #         sendDiscord(f"\n🚨 Rebalance Required! Net Delta: {net_delta:.4f}")
-            #         # ネットデルタを一部打ち消す注文
-            #         self.execute_trade(
-            #             hedgeSize, panic_amount_eth=-net_delta, manager=manager
-            #         )
-
-            # if net_delta < mThreshold:
-            #     target_delta = -1 * (self.ETHthreshold * TARGET_RATIO)
-            #     hedgeSize = -1 * (net_delta - target_delta)
-            #     if data["price"] * abs(hedgeSize) > 10.5:
-            #         log.info(f"\n🚨 Rebalance Required! Net Delta: {net_delta:.4f}")
-            #         sendDiscord(f"\n🚨 Rebalance Required! Net Delta: {net_delta:.4f}")
-            #         # ネットデルタを一部打ち消す注文
-            #         self.execute_trade(
-            #             hedgeSize, panic_amount_eth=-net_delta, manager=manager
-            #         )
 
             # 6_4 トレード済みの場合Trueとするフラグ、各ループ判定前にfalseで初期化
             hasAlreadyTraded = False
@@ -893,18 +874,37 @@ class SafeRealBot:
             # ver2追加　OutOfRangeスコアの計算、uniswapプールでのリポジションを行う
             if oor.runDetector(currentPrice=current_price):
                 sendDiscord("went out of range, making new position")
-                # TODO:プールのリポジションを実行
-                # new_lower = current_price * 0.90
-                # new_upper = current_price * 1.10
-                # new_id = self.uniManager.execute_rebalance(
-                #     old_token_id=self.currentTokenId,
-                #     new_lower_price=new_lower,
-                #     new_upper_price=new_upper,
-                #     current_price=current_price,
-                # )
-                # time.sleep(3)
-                # self.currentTokenId = new_id  # nftIDを更新
-                # self.rebalance_hedge(new_id)
+                tryCount = 1
+
+                while tryCount < 4:
+                    # TODO:プールのリポジションを実行
+                    tokenAmounts = self.get_token_amounts(
+                        data["L"], data["sqrtP"], data["tickLower"], data["tickUpper"]
+                    )
+                    response = pr.executeReposition(
+                        RPC_URL, current_price, tokenAmounts[0], tokenAmounts[1], False
+                    )
+
+                    if response:
+                        self.log.info("Successfully minted position!!")
+
+                        # リポジションクラスから新しいTOKENIDを取得してセット
+                        newTokenId = pr.TokenID
+                        self.log.info(f"setting new TokenID: {newTokenId}")
+                        self.currentTokenId = newTokenId
+                        break
+
+                    else:
+                        self.log.info("FAILURE.... ")
+                        tryCount += 1
+                        if tryCount < 4:
+                            self.log.info(
+                                f"Making a new challenge. TryCount: {tryCount} \n"
+                            )
+                        else:
+                            self.log.info("failed for 3times. Stopping bot ....")
+                            sendDiscord("failed for 3times. Stopping bot ....")
+                            exit()
 
             # dynamoDB壁録
             now = datetime.datetime.now()

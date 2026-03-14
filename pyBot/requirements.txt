@@ -1,0 +1,12 @@
+boto3
+eth_account
+requests
+dotenv
+hyperliquid-python-sdk
+web3
+
+pandas
+plotly
+streamlit
+
+

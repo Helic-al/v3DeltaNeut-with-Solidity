@@ -2,12 +2,11 @@ import os
 from datetime import datetime, timedelta
 
 import boto3
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit as st
 from dotenv import load_dotenv
+from plotly.subplots import make_subplots
 
 # --- 設定 ---
 load_dotenv("./.env")
@@ -82,9 +81,7 @@ def load_data():
 
         for col in cols_to_convert:
             if col in df.columns:
-                df[col] = df[col].apply(
-                    lambda x: float(x) if x is not None else 0.0
-                )
+                df[col] = df[col].apply(lambda x: float(x) if x is not None else 0.0)
             else:
                 df[col] = 0.0
 
@@ -187,14 +184,17 @@ if df.empty:
 st.sidebar.header("⚙️ 表示設定")
 
 # 不連続閾値
-threshold_pct = st.sidebar.slider(
-    "リバランス検出閾値 (%)",
-    min_value=0.1,
-    max_value=5.0,
-    value=1.0,
-    step=0.1,
-    help="Total Equityの変化率がこの閾値を超えた場合にリバランスと判定します",
-) / 100
+threshold_pct = (
+    st.sidebar.slider(
+        "リバランス検出閾値 (%)",
+        min_value=0.1,
+        max_value=5.0,
+        value=1.0,
+        step=0.1,
+        help="Total Equityの変化率がこの閾値を超えた場合にリバランスと判定します",
+    )
+    / 100
+)
 
 # リバランス点検出
 rebalance_indices = detect_rebalance_points(df, threshold_pct)
@@ -211,7 +211,9 @@ if not auto_start:
     )
 
 # 表示用データ
-df_filtered = get_display_df(df, rebalance_indices if auto_start else [], manual_start_idx)
+df_filtered = get_display_df(
+    df, rebalance_indices if auto_start else [], manual_start_idx
+)
 df_display = downsample(df_filtered)
 
 # --- 最新ステータス ---
@@ -237,13 +239,15 @@ if rebalance_indices:
 col_main, col_logs = st.columns([2, 1])
 
 with col_main:
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📈 資産推移",
-        "⚖️ デルタ分析",
-        "💹 PnL分析",
-        "📊 統計サマリー",
-        "🔄 リバランス履歴",
-    ])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [
+            "📈 資産推移",
+            "⚖️ デルタ分析",
+            "💹 PnL分析",
+            "📊 統計サマリー",
+            "🔄 リバランス履歴",
+        ]
+    )
 
     # ============ TAB 1: 資産推移 ============
     with tab1:
@@ -334,7 +338,9 @@ with col_main:
             ),
             secondary_y=True,
         )
-        fig_dual.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.3, secondary_y=True)
+        fig_dual.add_hline(
+            y=0, line_dash="dash", line_color="gray", opacity=0.3, secondary_y=True
+        )
         fig_dual.update_layout(
             margin=dict(l=20, r=20, t=30, b=20),
             height=400,
@@ -454,9 +460,16 @@ with col_main:
         st.subheader("📋 最新データスナップショット")
         latest_data = {
             "項目": [
-                "Total Equity", "Uniswap Value", "Hyperliquid Value",
-                "ETH Price", "LP Delta", "Net Delta", "Raw Net Delta",
-                "Funding Fees", "Step PnL", "Cumulative PnL",
+                "Total Equity",
+                "Uniswap Value",
+                "Hyperliquid Value",
+                "ETH Price",
+                "LP Delta",
+                "Net Delta",
+                "Raw Net Delta",
+                "Funding Fees",
+                "Step PnL",
+                "Cumulative PnL",
             ],
             "値": [
                 f"${latest['total_equity']:,.2f}",
@@ -483,16 +496,22 @@ with col_main:
                 row = df.iloc[idx]
                 prev_row = df.iloc[idx - 1] if idx > 0 else row
                 change = row["total_equity"] - prev_row["total_equity"]
-                change_pct = (change / prev_row["total_equity"]) * 100 if prev_row["total_equity"] != 0 else 0
+                change_pct = (
+                    (change / prev_row["total_equity"]) * 100
+                    if prev_row["total_equity"] != 0
+                    else 0
+                )
 
-                rebalance_data.append({
-                    "タイムスタンプ": row["timestamp"],
-                    "変動前 Equity ($)": f"{prev_row['total_equity']:,.2f}",
-                    "変動後 Equity ($)": f"{row['total_equity']:,.2f}",
-                    "変動額 ($)": f"{change:+,.2f}",
-                    "変動率 (%)": f"{change_pct:+.2f}%",
-                    "ETH Price ($)": f"{row['eth_price']:,.0f}",
-                })
+                rebalance_data.append(
+                    {
+                        "タイムスタンプ": row["timestamp"],
+                        "変動前 Equity ($)": f"{prev_row['total_equity']:,.2f}",
+                        "変動後 Equity ($)": f"{row['total_equity']:,.2f}",
+                        "変動額 ($)": f"{change:+,.2f}",
+                        "変動率 (%)": f"{change_pct:+.2f}%",
+                        "ETH Price ($)": f"{row['eth_price']:,.0f}",
+                    }
+                )
 
             df_rebalance = pd.DataFrame(rebalance_data)
             st.dataframe(df_rebalance, use_container_width=True)
