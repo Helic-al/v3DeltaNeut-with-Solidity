@@ -63,6 +63,17 @@ NFPM_ADDRESS = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
 # collect関数を含んだ完全なABI
 NFPM_ABI = '[{"inputs":[{"internalType":"uint256","name":"tokenId","type":"uint256"}],"name":"positions","outputs":[{"internalType":"uint96","name":"nonce","type":"uint96"},{"internalType":"address","name":"operator","type":"address"},{"internalType":"address","name":"token0","type":"address"},{"internalType":"address","name":"token1","type":"address"},{"internalType":"uint24","name":"fee","type":"uint24"},{"internalType":"int24","name":"tickLower","type":"int24"},{"internalType":"int24","name":"tickUpper","type":"int24"},{"internalType":"uint128","name":"liquidity","type":"uint128"},{"internalType":"uint256","name":"feeGrowthInside0LastX128","type":"uint256"},{"internalType":"uint256","name":"feeGrowthInside1LastX128","type":"uint256"},{"internalType":"uint128","name":"tokensOwed0","type":"uint128"},{"internalType":"uint128","name":"tokensOwed1","type":"uint128"}],"stateMutability":"view","type":"function"},{"inputs":[{"components":[{"internalType":"uint256","name":"tokenId","type":"uint256"},{"internalType":"address","name":"recipient","type":"address"},{"internalType":"uint128","name":"amount0Max","type":"uint128"},{"internalType":"uint128","name":"amount1Max","type":"uint128"}],"internalType":"struct INonfungiblePositionManager.CollectParams","name":"params","type":"tuple"}],"name":"collect","outputs":[{"internalType":"uint256","name":"amount0","type":"uint256"},{"internalType":"uint256","name":"amount1","type":"uint256"}],"stateMutability":"payable","type":"function"}]'
 
+# ERC20の残高を取得するための最小限のABI
+ERC20_ABI = [
+    {
+        "constant": True,
+        "inputs": [{"name": "_owner", "type": "address"}],
+        "name": "balanceOf",
+        "outputs": [{"name": "balance", "type": "uint256"}],
+        "type": "function",
+    }
+]
+
 DISCORD_URL = os.environ.get("DISCORD_URL")
 
 
@@ -448,27 +459,16 @@ class SafeRealBot:
                     break
 
             # 2. 先物（Perp）APIから、現在のポジションの「含み損益（Unrealized PnL）」の合計を計算
-            user_state = self.info.user_state(MAIN_ACCOUNT_ADDRESS)
-            unrealized_pnl = 0.0
-            for position in user_state.get("assetPositions", []):
-                pos_data = position.get("position", {})
-                unrealized_pnl += float(pos_data.get("unrealizedPnl", 0.0))
+            # user_state = self.info.user_state(MAIN_ACCOUNT_ADDRESS)
+            # unrealized_pnl = 0.0
+            # for position in user_state.get("assetPositions", []):
+            #     pos_data = position.get("position", {})
+            #     unrealized_pnl += float(pos_data.get("unrealizedPnl", 0.0))
 
             # 3. 現金残高に含み損益を足して、真の評価額とする
-            hl_value_usd = spot_usdc + unrealized_pnl
+            hl_value_usd = spot_usdc
 
             # total_equity = uni_value_usd + hl_value_usd
-
-            # ERC20の残高を取得するための最小限のABI
-            ERC20_ABI = [
-                {
-                    "constant": True,
-                    "inputs": [{"name": "_owner", "type": "address"}],
-                    "name": "balanceOf",
-                    "outputs": [{"name": "balance", "type": "uint256"}],
-                    "type": "function",
-                }
-            ]
 
             try:
                 # ① 生のETH残高 (ガス代用など / 18 decimals)
@@ -524,6 +524,23 @@ class SafeRealBot:
         except Exception as e:
             log.info(f"Equity Calc Error: {e}")
             return None
+
+    def getWalletEth(self):
+        try:
+            # ① 生のETH残高 (ガス代用など / 18 decimals)
+            eth_wei = self.w3.eth.get_balance(MAIN_ACCOUNT_ADDRESS)
+            eth_wallet = eth_wei / (10**18)
+
+            # ② WETH残高 (18 decimals)
+            weth_contract = self.w3.eth.contract(address=WETH_ADDRESS, abi=ERC20_ABI)
+            weth_wei = weth_contract.functions.balanceOf(MAIN_ACCOUNT_ADDRESS).call()
+            weth_wallet = weth_wei / (10**18)
+
+            return weth_wallet + eth_wallet
+
+        except Exception as e:
+            log.error(f"ウォレット残高の取得に失敗しました: {e}")
+            return 0
 
     def calcRawDelta(self, currentPrice):
         # 定数定義
@@ -775,8 +792,11 @@ class SafeRealBot:
             lp_delta_eth = amount0_wei / DECIMALS_ETH
             raw_lp_delra_eth = raw_amount0_wei / DECIMALS_ETH
 
-            # ネットデルタ (LPのETH + ヘッジのETH)
-            net_delta = lp_delta_eth + data["hedge_pos"]
+            # 追加:walletのeth残高もヘッジする
+            walletEth = self.getWalletEth()
+
+            # ネットデルタ (LPのETH + ヘッジのETH + walletのETH)
+            net_delta = lp_delta_eth + data["hedge_pos"] + walletEth
             raw_net_delta = raw_lp_delra_eth + data["hedge_pos"]
 
             # --- 表示用データの作成 ---
