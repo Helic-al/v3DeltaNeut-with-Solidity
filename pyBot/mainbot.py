@@ -797,7 +797,7 @@ class SafeRealBot:
 
             # ネットデルタ (LPのETH + ヘッジのETH + walletのETH)
             net_delta = lp_delta_eth + data["hedge_pos"] + walletEth
-            raw_net_delta = raw_lp_delra_eth + data["hedge_pos"]
+            raw_net_delta = raw_lp_delra_eth + data["hedge_pos"] + walletEth
 
             # --- 表示用データの作成 ---
             current_price = data["price"]
