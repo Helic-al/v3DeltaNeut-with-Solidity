@@ -709,6 +709,44 @@ class SafeRealBot:
         DECIMALS_ETH = 1e18
         oorThreshold = 0.06
 
+        # リポジションを行うクラスのインスタンス作成
+        pr = PoolRepositioner(TARGET_TOKEN_ID, ARB_SECRET)
+
+        if self.currentTokenId == 0:
+            tryCount = 1
+            while tryCount < 4:
+                # TODO:プールのリポジションを実行
+                # TODO: get_token_amountsは流動性Lから枚数を計算しているのでノーポジションからの作成の際には使用できない
+                # そのためwalletから直接取得した枚数と、hyperliquidから取得した価格を渡す必要がある
+                wethAmount, usdcAmount = self.getWalletWethAndUsdc()
+                currentPrice = self.get_cex_price()
+                response = pr.executeReposition(
+                    RPC_URL, currentPrice, wethAmount, usdcAmount, False
+                )
+
+                if response:
+                    self.log.info("Successfully minted position!!")
+
+                    # リポジションクラスから新しいTOKENIDを取得してセット
+                    newTokenId = pr.TokenID
+                    self.log.info(f"setting new TokenID: {newTokenId}")
+                    self.currentTokenId = newTokenId
+
+                    break
+
+                else:
+                    self.log.info("FAILURE.... ")
+                    tryCount += 1
+                    if tryCount < 4:
+                        self.log.info(
+                            f"Making a new challenge. TryCount: {tryCount} \n"
+                        )
+                        continue
+                    else:
+                        self.log.info("failed for 3times. Stopping bot ....")
+                        sendDiscord("failed for 3times. Stopping bot ....")
+                        exit()
+
         dataInit = self.get_onchain_data()
 
         sqrtPa = 1.0001 ** (dataInit["tickLower"] / 2)
@@ -721,9 +759,6 @@ class SafeRealBot:
             k=0.9,
         )
 
-        # リポジションを行うクラスのインスタンス作成
-        pr = PoolRepositioner(TARGET_TOKEN_ID, ARB_SECRET)
-
         lpf = LowPassFilter(alpha=0.15)
 
         emaPrice = LowPassFilter(alpha=0.016)
@@ -733,44 +768,6 @@ class SafeRealBot:
 
         while True:
             data = self.get_onchain_data()
-
-            if self.currentTokenId == 0:
-                tryCount = 1
-                while tryCount < 4:
-                    # TODO:プールのリポジションを実行
-                    # TODO: get_token_amountsは流動性Lから枚数を計算しているのでノーポジションからの作成の際には使用できない
-                    # そのためwalletから直接取得した枚数と、hyperliquidから取得した価格を渡す必要がある
-                    wethAmount, usdcAmount = self.getWalletWethAndUsdc()
-                    currentPrice = self.get_cex_price()
-                    response = pr.executeReposition(
-                        RPC_URL, currentPrice, wethAmount, usdcAmount, False
-                    )
-
-                    if response:
-                        self.log.info("Successfully minted position!!")
-
-                        # リポジションクラスから新しいTOKENIDを取得してセット
-                        newTokenId = pr.TokenID
-                        self.log.info(f"setting new TokenID: {newTokenId}")
-                        self.currentTokenId = newTokenId
-
-                        break
-
-                    else:
-                        self.log.info("FAILURE.... ")
-                        tryCount += 1
-                        if tryCount < 4:
-                            self.log.info(
-                                f"Making a new challenge. TryCount: {tryCount} \n"
-                            )
-                            continue
-                        else:
-                            self.log.info("failed for 3times. Stopping bot ....")
-                            sendDiscord("failed for 3times. Stopping bot ....")
-                            exit()
-
-                    # breakした場合にはwhileループのはじめからやり直す
-                    continue
 
             # データ取得失敗時などはスキップ
             if data is None:
