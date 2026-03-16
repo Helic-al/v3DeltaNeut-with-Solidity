@@ -35,7 +35,7 @@ alchemyKey = os.environ.get("ALCHEMY_KEY")  # 秘密鍵
 TARGET_TOKEN_ID = int(
     os.environ.get("NFT_TOKEN", 0)
 )  # ★ここにUniswapのToken IDを入れる
-THRESHOLD = 0.1  # 初期リバランス閾値、dynamoDBの初回記録まではこの値を用いる
+THRESHOLD = 0.13 # 初期リバランス閾値、dynamoDBの初回記録まではこの値を用いる
 ALLOWABLE_RISK_PCT = 0.050  # 運用資金から許容するズレ(デルタETH)の割合
 TARGET_RATIO = 0.5  # しきい値の何割までデルタを打ち消すか
 MAX_RETRY = 3  # 指値注文のリトライ回数
@@ -46,7 +46,7 @@ AWS_ACCESS_KEY = os.environ.get("AWS_KEY")
 AWS_SECRET_KEY = os.environ.get("AWS_SECRET")
 REGION_NAME = "ap-northeast-1"
 # --- インフラ設定 ---
-RPC_URL = os.environ.get("RPC_URL")
+RPC_URL = os.environ.get("ALCHEMY_RPC_URL")
 HL_BASE_URL = constants.MAINNET_API_URL
 
 WETH_ADDRESS = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"
