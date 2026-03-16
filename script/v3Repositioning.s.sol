@@ -19,6 +19,8 @@ interface ISwapRouter {
 }
 
 interface INonfungiblePositionManager {
+    function ownerOf(uint256 tokenId) external view returns (address);
+
     function positions(uint256 tokenId) external view returns (
         uint96 nonce, address operator, address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper,
         uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1
@@ -77,6 +79,12 @@ contract Reposition is Script {
 
     function _withdraw(uint256 oldTokenId, address recipient) internal {
         console.log("Starting Withdraw Phase for Token ID:", oldTokenId);
+     
+        address nftOwner = NFPM.ownerOf(oldTokenId);
+        console.log("NFT Actual Owner:", nftOwner);
+        console.log("Script Executing As:", recipient);
+        
+        require(nftOwner == recipient, "ERROR: You are not the owner of this NFT!");
         
         uint128 liq;
         {
