@@ -725,7 +725,7 @@ class SafeRealBot:
                 )
 
                 if response:
-                    self.log.info("Successfully minted position!!")
+                    log.info("Successfully minted position!!")
 
                     # リポジションクラスから新しいTOKENIDを取得してセット
                     newTokenId = pr.TokenID
@@ -735,15 +735,13 @@ class SafeRealBot:
                     break
 
                 else:
-                    self.log.info("FAILURE.... ")
+                    log.info("FAILURE.... ")
                     tryCount += 1
                     if tryCount < 4:
-                        self.log.info(
-                            f"Making a new challenge. TryCount: {tryCount} \n"
-                        )
+                        log.info(f"Making a new challenge. TryCount: {tryCount} \n")
                         continue
                     else:
-                        self.log.info("failed for 3times. Stopping bot ....")
+                        log.info("failed for 3times. Stopping bot ....")
                         sendDiscord("failed for 3times. Stopping bot ....")
                         exit()
 
