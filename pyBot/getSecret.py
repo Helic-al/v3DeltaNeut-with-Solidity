@@ -1,4 +1,9 @@
+import os
+
 import boto3
+from dotenv import load_dotenv
+
+load_dotenv("./.env")
 
 
 def get_secret_key():
@@ -7,7 +12,7 @@ def get_secret_key():
 
     try:
         response = ssm.get_parameter(
-            Name="/bot/arbSecret",  # 手順1で決めた名前
+            Name=os.environ.get("AWS_SSM"),  # 手順1で決めた名前
             WithDecryption=True,  # SecureStringを復号化して取得
         )
         return response["Parameter"]["Value"].strip()
