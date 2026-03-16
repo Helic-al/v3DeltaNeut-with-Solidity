@@ -115,20 +115,34 @@ contract Reposition is Script {
         }));
         console.log("Swap successful.");
     }
-
+    
     function _addLiquidity(int24 newTickLower, int24 newTickUpper, address recipient) internal returns (uint256) {
         console.log("Starting Add Liquidity...");
         uint256 bal0 = IERC20(WETH).balanceOf(recipient);
         uint256 bal1 = IERC20(USDC).balanceOf(recipient);
 
+        // 💡 [修正ポイント] STF対策：シミュレーションとのズレを吸収するため、
+        // 実際の残高の「99.5%」を投入希望額（Desired）として設定する
+        uint256 desired0 = (bal0 * 995) / 1000;
+        uint256 desired1 = (bal1 * 995) / 1000;
+
+        // Approveは実際の残高の全額を通しておく
         IERC20(WETH).approve(address(NFPM), bal0);
         IERC20(USDC).approve(address(NFPM), bal1);
 
+        // 💡 amountDesired に bal ではなく desired を渡すように変更
         (uint256 newTokenId, , , ) = NFPM.mint(INonfungiblePositionManager.MintParams({
             token0: WETH, token1: USDC, fee: POOL_FEE, tickLower: newTickLower, tickUpper: newTickUpper,
-            amount0Desired: bal0, amount1Desired: bal1, amount0Min: 0, amount1Min: 0,
-            recipient: recipient, deadline: block.timestamp+300
+            amount0Desired: desired0, amount1Desired: desired1, amount0Min: 0, amount1Min: 0,
+            recipient: recipient, deadline: block.timestamp + 300
         }));
+        
+        // ダストのApproveリセット処理
+        if (IERC20(WETH).allowance(recipient, address(NFPM)) > 0) IERC20(WETH).approve(address(NFPM), 0);
+        if (IERC20(USDC).allowance(recipient, address(NFPM)) > 0) IERC20(USDC).approve(address(NFPM), 0);
+
+        return newTokenId;
+    }
         
         if (IERC20(WETH).allowance(recipient, address(NFPM)) > 0) IERC20(WETH).approve(address(NFPM), 0);
         if (IERC20(USDC).allowance(recipient, address(NFPM)) > 0) IERC20(USDC).approve(address(NFPM), 0);
