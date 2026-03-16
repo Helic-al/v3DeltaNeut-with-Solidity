@@ -35,7 +35,7 @@ alchemyKey = os.environ.get("ALCHEMY_KEY")  # 秘密鍵
 TARGET_TOKEN_ID = int(
     os.environ.get("NFT_TOKEN", 0)
 )  # ★ここにUniswapのToken IDを入れる
-THRESHOLD = 0.13 # 初期リバランス閾値、dynamoDBの初回記録まではこの値を用いる
+THRESHOLD = 0.13  # 初期リバランス閾値、dynamoDBの初回記録まではこの値を用いる
 ALLOWABLE_RISK_PCT = 0.050  # 運用資金から許容するズレ(デルタETH)の割合
 TARGET_RATIO = 0.5  # しきい値の何割までデルタを打ち消すか
 MAX_RETRY = 3  # 指値注文のリトライ回数
@@ -303,6 +303,19 @@ class SafeRealBot:
         log.info(f"✅ Bot initialized for Address: {self.account.address}")
         log.info(f"🎯 Watching Uniswap Position Token ID: {TARGET_TOKEN_ID}")
 
+        # CEX価格取得用ヘルパ関数
+
+    def get_cex_price(self):
+        # Hyperliquidから全銘柄の現在価格(Mark Price)を取得
+        while True:
+            mids = self.info.all_mids()
+            if mids:
+                cex_price = float(mids["ETH"])
+                return cex_price
+            else:
+                print("Failed to get cexPrice, Trying again ...")
+                time.sleep(10)
+
     def get_onchain_data(self):
         """価格、ユーザーの流動性(L)、ヘッジポジションを一括取得"""
         try:
@@ -542,6 +555,24 @@ class SafeRealBot:
             log.error(f"ウォレット残高の取得に失敗しました: {e}")
             return 0
 
+    def getWalletWethAndUsdc(self):
+        try:
+            # WETHの枚数を取得
+            # ② WETH残高 (18 decimals)
+            weth_contract = self.w3.eth.contract(address=WETH_ADDRESS, abi=ERC20_ABI)
+            weth_wei = weth_contract.functions.balanceOf(MAIN_ACCOUNT_ADDRESS).call()
+            weth_wallet = weth_wei / (10**18)
+
+            # ③ USDC残高 (ArbitrumネイティブUSDCは 6 decimals)
+            usdc_contract = self.w3.eth.contract(address=USDC_ADDRESS, abi=ERC20_ABI)
+            usdc_mwei = usdc_contract.functions.balanceOf(MAIN_ACCOUNT_ADDRESS).call()
+            usdc_wallet = usdc_mwei / (10**6)
+
+            return weth_wallet, usdc_wallet
+
+        except Exception as e:
+            self.log.error(f"ウォレット残高の取得に失敗しました: {e}")
+
     def calcRawDelta(self, currentPrice):
         # 定数定義
         DECIMALS_ETH = 1e18
@@ -707,11 +738,12 @@ class SafeRealBot:
                 tryCount = 1
                 while tryCount < 4:
                     # TODO:プールのリポジションを実行
-                    tokenAmounts = self.get_token_amounts(
-                        data["L"], data["sqrtP"], data["tickLower"], data["tickUpper"]
-                    )
+                    # TODO: get_token_amountsは流動性Lから枚数を計算しているのでノーポジションからの作成の際には使用できない
+                    # そのためwalletから直接取得した枚数と、hyperliquidから取得した価格を渡す必要がある
+                    wethAmount, usdcAmount = self.getWalletWethAndUsdc()
+                    currentPrice = self.get_cex_price()
                     response = pr.executeReposition(
-                        RPC_URL, data["price"], tokenAmounts[0], tokenAmounts[1], False
+                        RPC_URL, currentPrice, wethAmount, usdcAmount, False
                     )
 
                     if response:
@@ -873,12 +905,7 @@ class SafeRealBot:
                         f"\n🚨BAILOUT!! Rebalance Required! Raw Net Delta: {raw_net_delta:.4f}, Current Price: {current_price:.2f}"
                     )
 
-                    if raw_net_delta > 0:
-                        target_delta = self.ETHthreshold * TARGET_RATIO
-                    else:
-                        target_delta = -1 * self.ETHthreshold * TARGET_RATIO
-
-                    sz = -1 * (raw_net_delta - target_delta)
+                    sz = -1 * raw_net_delta
 
                     # ネットデルタを打ち消す
                     self.execute_trade(sz)
@@ -899,7 +926,10 @@ class SafeRealBot:
                 while tryCount < 4:
                     # TODO:プールのリポジションを実行
                     tokenAmounts = self.get_token_amounts(
-                        data["L"], data["sqrtP"], data["tickLower"], data["tickUpper"]
+                        data["L"],
+                        data["sqrtP_raw"],
+                        data["tickLower"],
+                        data["tickUpper"],
                     )
                     response = pr.executeReposition(
                         RPC_URL, current_price, tokenAmounts[0], tokenAmounts[1], False
