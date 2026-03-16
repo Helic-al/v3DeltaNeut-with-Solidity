@@ -93,7 +93,7 @@ contract Reposition is Script {
 
         if (liq > 0) {
             NFPM.decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams({
-                tokenId: oldTokenId, liquidity: liq, amount0Min: 0, amount1Min: 0, deadline: block.timestamp
+                tokenId: oldTokenId, liquidity: liq, amount0Min: 0, amount1Min: 0, deadline: block.timestamp+300
             }));
             NFPM.collect(INonfungiblePositionManager.CollectParams({
                 tokenId: oldTokenId, recipient: recipient, amount0Max: type(uint128).max, amount1Max: type(uint128).max
@@ -111,7 +111,7 @@ contract Reposition is Script {
 
         ROUTER.exactInputSingle(ISwapRouter.ExactInputSingleParams({
             tokenIn: tokenIn, tokenOut: tokenOut, fee: POOL_FEE, recipient: recipient,
-            deadline: block.timestamp, amountIn: swapAmount, amountOutMinimum: 0, sqrtPriceLimitX96: 0
+            deadline: block.timestamp+300, amountIn: swapAmount, amountOutMinimum: 0, sqrtPriceLimitX96: 0
         }));
         console.log("Swap successful.");
     }
@@ -127,7 +127,7 @@ contract Reposition is Script {
         (uint256 newTokenId, , , ) = NFPM.mint(INonfungiblePositionManager.MintParams({
             token0: WETH, token1: USDC, fee: POOL_FEE, tickLower: newTickLower, tickUpper: newTickUpper,
             amount0Desired: bal0, amount1Desired: bal1, amount0Min: 0, amount1Min: 0,
-            recipient: recipient, deadline: block.timestamp
+            recipient: recipient, deadline: block.timestamp+300
         }));
         
         if (IERC20(WETH).allowance(recipient, address(NFPM)) > 0) IERC20(WETH).approve(address(NFPM), 0);
