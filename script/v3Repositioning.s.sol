@@ -143,10 +143,4 @@ contract Reposition is Script {
 
         return newTokenId;
     }
-        
-        if (IERC20(WETH).allowance(recipient, address(NFPM)) > 0) IERC20(WETH).approve(address(NFPM), 0);
-        if (IERC20(USDC).allowance(recipient, address(NFPM)) > 0) IERC20(USDC).approve(address(NFPM), 0);
-
-        return newTokenId;
-    }
 }
