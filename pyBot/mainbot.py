@@ -571,7 +571,7 @@ class SafeRealBot:
             return weth_wallet, usdc_wallet
 
         except Exception as e:
-            self.log.error(f"ウォレット残高の取得に失敗しました: {e}")
+            log.error(f"ウォレット残高の取得に失敗しました: {e}")
 
     def calcRawDelta(self, currentPrice):
         # 定数定義
@@ -729,7 +729,7 @@ class SafeRealBot:
 
                     # リポジションクラスから新しいTOKENIDを取得してセット
                     newTokenId = pr.TokenID
-                    self.log.info(f"setting new TokenID: {newTokenId}")
+                    log.info(f"setting new TokenID: {newTokenId}")
                     self.currentTokenId = newTokenId
 
                     break
@@ -931,23 +931,21 @@ class SafeRealBot:
                     )
 
                     if response:
-                        self.log.info("Successfully minted position!!")
+                        log.info("Successfully minted position!!")
 
                         # リポジションクラスから新しいTOKENIDを取得してセット
                         newTokenId = pr.TokenID
-                        self.log.info(f"setting new TokenID: {newTokenId}")
+                        log.info(f"setting new TokenID: {newTokenId}")
                         self.currentTokenId = newTokenId
                         break
 
                     else:
-                        self.log.info("FAILURE.... ")
+                        log.info("FAILURE.... ")
                         tryCount += 1
                         if tryCount < 4:
-                            self.log.info(
-                                f"Making a new challenge. TryCount: {tryCount} \n"
-                            )
+                            log.info(f"Making a new challenge. TryCount: {tryCount} \n")
                         else:
-                            self.log.info("failed for 3times. Stopping bot ....")
+                            log.info("failed for 3times. Stopping bot ....")
                             sendDiscord("failed for 3times. Stopping bot ....")
                             exit()
 
