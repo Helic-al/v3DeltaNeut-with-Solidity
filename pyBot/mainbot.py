@@ -305,12 +305,12 @@ class SafeRealBot:
 
         # CEX価格取得用ヘルパ関数
 
-    def get_cex_price(self):
+    def get_cex_price(self, coin="ETH"):
         # Hyperliquidから全銘柄の現在価格(Mark Price)を取得
         while True:
             mids = self.info.all_mids()
             if mids:
-                cex_price = float(mids["ETH"])
+                cex_price = float(mids[coin])
                 return cex_price
             else:
                 print("Failed to get cexPrice, Trying again ...")
