@@ -12,7 +12,7 @@ load_dotenv("./.env")
 # 1. Pool Contract (価格取得用)
 POOL_ADDRESS = "0xC6962004f452bE9203591991D15f6b388e09E8D0" # ETH/USDC 0.05%
 POOL_ABI = '[{"inputs":[],"name":"slot0","outputs":[{"internalType":"uint160","name":"sqrtPriceX96","type":"uint160"},{"internalType":"int24","name":"tick","type":"int24"},{"internalType":"uint16","name":"observationIndex","type":"uint16"},{"internalType":"uint16","name":"observationCardinality","type":"uint16"},{"internalType":"uint16","name":"observationCardinalityNext","type":"uint16"},{"internalType":"uint8","name":"feeProtocol","type":"uint8"},{"internalType":"bool","name":"unlocked","type":"bool"}],"stateMutability":"view","type":"function"}]'
-ARB_POOL_ADDRESS = Web3.toChecksumAddress("0xcda53b1f66614552f834ceef361a8d12a0b8dad8")
+ARB_POOL_ADDRESS = Web3.to_checksum_address("0xcda53b1f66614552f834ceef361a8d12a0b8dad8")
 
 RPC_URL = os.environ.get("INFURA_RPC_URL")
 

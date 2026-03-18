@@ -580,7 +580,7 @@ class SafeRealBot:
         ウォレットが所有している最新のUniswap V3 NFTのTokenIDを取得する
         """
         # NFPMのコントラクトインスタンスを作成（abiはERC721準拠のもの）
-        nfpm_contract = self.web3.eth.contract(address=NFPM_ADDRESS, abi=NFPM_ABI)
+        nfpm_contract = self.w3.eth.contract(address=NFPM_ADDRESS, abi=NFPM_ABI)
 
         # 自分が持っているNFTの総数を取得
         balance = nfpm_contract.functions.balanceOf(owner_address).call()
