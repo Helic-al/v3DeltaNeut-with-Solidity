@@ -573,6 +573,28 @@ class SafeRealBot:
         except Exception as e:
             log.error(f"ウォレット残高の取得に失敗しました: {e}")
 
+    # mainbot.py または v3Repositioner.py に追加するイメージ
+
+    def get_latest_token_id(self, owner_address=MAIN_ACCOUNT_ADDRESS):
+        """
+        ウォレットが所有している最新のUniswap V3 NFTのTokenIDを取得する
+        """
+        # NFPMのコントラクトインスタンスを作成（abiはERC721準拠のもの）
+        nfpm_contract = self.web3.eth.contract(address=NFPM_ADDRESS, abi=NFPM_ABI)
+
+        # 自分が持っているNFTの総数を取得
+        balance = nfpm_contract.functions.balanceOf(owner_address).call()
+
+        if balance == 0:
+            return 0
+
+        # インデックスは0から始まるため、(balance - 1) が最新のNFT
+        latest_token_id = nfpm_contract.functions.tokenOfOwnerByIndex(
+            owner_address, balance - 1
+        ).call()
+
+        return latest_token_id
+
     def calcRawDelta(self, currentPrice):
         # 定数定義
         DECIMALS_ETH = 1e18
@@ -728,7 +750,8 @@ class SafeRealBot:
                     log.info("Successfully minted position!!")
 
                     # リポジションクラスから新しいTOKENIDを取得してセット
-                    newTokenId = pr.TokenID
+                    newTokenId = self.get_latest_token_id()
+                    pr.TokenID = newTokenId
                     log.info(f"setting new TokenID: {newTokenId}")
                     self.currentTokenId = newTokenId
 
@@ -934,7 +957,8 @@ class SafeRealBot:
                         log.info("Successfully minted position!!")
 
                         # リポジションクラスから新しいTOKENIDを取得してセット
-                        newTokenId = pr.TokenID
+                        newTokenId = self.get_latest_token_id()
+                        pr.TokenID = newTokenId
                         log.info(f"setting new TokenID: {newTokenId}")
                         self.currentTokenId = newTokenId
                         break
