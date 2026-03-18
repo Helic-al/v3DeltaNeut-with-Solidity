@@ -38,11 +38,11 @@ class transPrice(SafeRealBot):
 
 
 if __name__ == "__main__":
+    tp = transPrice()
+
+    tp.w3 = Web3(Web3.HTTPProvider(RPC_URL))
+
     while True:
-        tp = transPrice()
-
-        tp.w3 = Web3(Web3.HTTPProvider(RPC_URL))
-
         now = datetime.datetime.now()
         dp = tp.getDexPrice()
         cp = tp.get_cex_price()
