@@ -48,7 +48,7 @@ if __name__ == "__main__":
     arb = transPrice()
 
     arb.w3 = Web3(Web3.HTTPProvider(RPC_URL))
-    arb.self.pool_contract = arb.w3.arb.contract(address=ARB_POOL_ADDRESS, abi=POOL_ABI)
+    arb.self.pool_contract = arb.w3.eth.contract(address=ARB_POOL_ADDRESS, abi=POOL_ABI)
 
     while True:
         now = datetime.datetime.now()
