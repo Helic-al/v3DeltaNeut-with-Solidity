@@ -10,9 +10,11 @@ from web3 import Web3
 load_dotenv("./.env")
 # --- Uniswapコントラクト設定 (Arbitrum) ---
 # 1. Pool Contract (価格取得用)
-POOL_ADDRESS = "0xC6962004f452bE9203591991D15f6b388e09E8D0" # ETH/USDC 0.05%
+POOL_ADDRESS = "0xC6962004f452bE9203591991D15f6b388e09E8D0"  # ETH/USDC 0.05%
 POOL_ABI = '[{"inputs":[],"name":"slot0","outputs":[{"internalType":"uint160","name":"sqrtPriceX96","type":"uint160"},{"internalType":"int24","name":"tick","type":"int24"},{"internalType":"uint16","name":"observationIndex","type":"uint16"},{"internalType":"uint16","name":"observationCardinality","type":"uint16"},{"internalType":"uint16","name":"observationCardinalityNext","type":"uint16"},{"internalType":"uint8","name":"feeProtocol","type":"uint8"},{"internalType":"bool","name":"unlocked","type":"bool"}],"stateMutability":"view","type":"function"}]'
-ARB_POOL_ADDRESS = Web3.to_checksum_address("0xcda53b1f66614552f834ceef361a8d12a0b8dad8")
+ARB_POOL_ADDRESS = Web3.to_checksum_address(
+    "0xcda53b1f66614552f834ceef361a8d12a0b8dad8"
+)
 
 RPC_URL = os.environ.get("INFURA_RPC_URL")
 
@@ -56,9 +58,15 @@ if __name__ == "__main__":
         arbDP = arb.getDexPrice()
         arbcp = arb.get_cex_price(coin="ARB")
 
-        newRow = {"timestamp": now, "ETH_DEX": dp, "ETH_CEX": cp, "ARB_DEX": arbDP, "ARB_CEX", arbcp}
+        newRow = {
+            "timestamp": now,
+            "ETH_DEX": dp,
+            "ETH_CEX": cp,
+            "ARB_DEX": arbDP,
+            "ARB_CEX": arbcp,
+        }
 
-        fieldNames = ["timestamp", "ETH_DEX", "ETH_CEX","ARB_DEX", "ARB_CEX"]
+        fieldNames = ["timestamp", "ETH_DEX", "ETH_CEX", "ARB_DEX", "ARB_CEX"]
 
         with open("ethAndArb.csv", mode="a", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldNames)
