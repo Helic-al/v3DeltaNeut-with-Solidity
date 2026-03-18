@@ -32,22 +32,23 @@ class transPrice(SafeRealBot):
 
 
 if __name__ == "__main__":
-    tp = transPrice()
+    while True:
+        tp = transPrice()
 
-    now = datetime.datetime.now()
-    dp = tp.getDexPrice()
-    cp = tp.get_cex_price()
+        now = datetime.datetime.now()
+        dp = tp.getDexPrice()
+        cp = tp.get_cex_price()
 
-    newRow = {"timestamp": now, "DexPrice": dp, "CexPrice": cp}
+        newRow = {"timestamp": now, "DexPrice": dp, "CexPrice": cp}
 
-    fieldNames = ["timestamp", "DexPrice", "CexPrice"]
+        fieldNames = ["timestamp", "DexPrice", "CexPrice"]
 
-    with open("logData.csv", mode="a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldNames)
+        with open("logData.csv", mode="a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldNames)
 
-        if f.tell() == 0:
-            writer.writeheader()
+            if f.tell() == 0:
+                writer.writeheader()
 
-        writer.writerow(newRow)
+            writer.writerow(newRow)
 
-    time.sleep(10)
+        time.sleep(10)
