@@ -76,7 +76,7 @@ class PoolRepositioner:
         tickSpacing = 10
         currentTick = int(math.log(currentPrice / 1e12, 1.0001))
 
-        halfWidthTicks = 400  # 4.0%
+        halfWidthTicks = 700  # 7.0%
 
         newTickLower = currentTick - halfWidthTicks
         newTickUpper = currentTick + halfWidthTicks
