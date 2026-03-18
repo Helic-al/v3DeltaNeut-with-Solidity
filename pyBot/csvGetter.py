@@ -1,13 +1,19 @@
 import csv
 import datetime
+import os
 import time
 
+from dotenv import load_dotenv
 from mainbot import SafeRealBot
+from web3 import Web3
 
+load_dotenv("./.env")
 # --- Uniswapコントラクト設定 (Arbitrum) ---
 # 1. Pool Contract (価格取得用)
 POOL_ADDRESS = "0xC6962004f452bE9203591991D15f6b388e09E8D0"
 POOL_ABI = '[{"inputs":[],"name":"slot0","outputs":[{"internalType":"uint160","name":"sqrtPriceX96","type":"uint160"},{"internalType":"int24","name":"tick","type":"int24"},{"internalType":"uint16","name":"observationIndex","type":"uint16"},{"internalType":"uint16","name":"observationCardinality","type":"uint16"},{"internalType":"uint16","name":"observationCardinalityNext","type":"uint16"},{"internalType":"uint8","name":"feeProtocol","type":"uint8"},{"internalType":"bool","name":"unlocked","type":"bool"}],"stateMutability":"view","type":"function"}]'
+
+RPC_URL = os.environ.get("INFURA_RPC_URL")
 
 
 class transPrice(SafeRealBot):
@@ -34,6 +40,8 @@ class transPrice(SafeRealBot):
 if __name__ == "__main__":
     while True:
         tp = transPrice()
+
+        tp.w3 = Web3(Web3.HTTPProvider(RPC_URL))
 
         now = datetime.datetime.now()
         dp = tp.getDexPrice()
